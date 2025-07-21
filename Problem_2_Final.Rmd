@@ -1,0 +1,298 @@
+---
+title: "Problem_2"
+author: "Ann"
+date: "2024-12-06"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(here)
+df <- read.csv(here("Encephalitis_Data.csv"))
+set.seed(123)
+```
+
+## a)
+
+```{r, echo=FALSE }
+df$Sex <- as.factor(df$Sex)
+
+for (i in c(4:31)) {
+  df[[i]] <- as.factor(df[[i]])
+}
+
+```
+
+
+
+It can be identified that there are 29 categorical variables and 3 continuous variables with some missing values. The below bi plot visualize this dataset.  
+
+
+```{r, warning=FALSE, message=FALSE}
+library(ComplexHeatmap)
+```
+
+
+```{r}
+
+
+Heatmap(t(as.matrix(df[,-1])),row_names_gp=gpar(fontsize=8),column_names_gp=gpar(fontsize=8),
+       column_title="",row_title="Variables", show_heatmap_legend = FALSE)
+
+```
+
+It can be identified from the above heatmap that missing value composition of the variables Abnormal_CT, Abnormal_MRI, Abnormal_EEG and Abnormal_glucose are significanltly higher. Therefore those variables were removed from the analysis since studies with low to no variability do not contribute much to clustering, and hence can be removed. Further it can be observed that there are 29 binary variables and from those there are variables such as "Tick bite", "Untreated water", etc are consist mostly only one value. It can be further confirmed through the below descriptive statistics.
+
+```{r}
+summary(df[,-1])
+```
+It can be observed from the above measures that there are some extreme values in the variables length of the stay and the illness duration since max value is more than 3rd quantiles. From the below boxplots it can be observed that there are 4 observations with extreme values.
+
+```{r}
+par(mfrow = c(1, 2))
+
+boxplot(df$Duration_illness,
+        main = paste("Boxplot of Duration of illness"),
+        col = "lightpink")
+
+boxplot(df$Length_hospital_stay,
+        main = paste("Boxplot of Hospital Stay"),
+        col = "lightpink")
+
+
+```
+
+
+```{r}
+df_1 <- df[,-c(1,4:7)]
+```
+
+
+## b)
+
+In order to perform the Cluster analysis for this process data, agglomerative hierarchical clustering using the Euclidean distance with average linkage was used. The following figure shows the dendogram of the clustering for the data. The complete linkage methods was used to emphasizes forming compact clusters by minimizing the maximum distance between any two points in different clusters.
+
+
+```{r, warning=FALSE, message=FALSE}
+library(factoextra)
+```
+
+
+```{r, warning=FALSE}
+dist_matrix <- dist(df_1, method = "euclidean")
+```
+
+
+```{r, warning=FALSE}
+color <- colorRampPalette(c('green','black','red'))(50)
+
+
+pheatmap(t(as.matrix(dist_matrix)),
+         color = color,
+         main = "Heatmap of Distance Matrix",
+         legend = TRUE)   
+
+```
+The above heatmap of distance matrix between the observations provides that distance between most of the individuals are same. Therefore, most of the observations are seems like homogeneous where as there are significantly few observations show higher distance between the observations. 
+
+```{r, warning=FALSE}
+# Perform clustering
+hclust_model <- hclust(dist_matrix, method = "complete")
+# Plot dendrogram
+fviz_dend(hclust_model)
+
+```
+
+
+```{r, warning=FALSE}
+# Elbow Method
+
+fviz_nbclust(df_1, hcut, method = "wss") +
+  geom_vline(xintercept = 3, linetype = "dashed", color = "red", size = 1)
+
+```
+
+From the above plot of total WSS, it can be observed that the optimal number of clusters are 3 with the elbow method. 
+
+```{r}
+K=3
+```
+
+
+Below table provide that there are more than 80% of the observations belong to a one one cluster. 
+
+```{r}
+# Cut dendrogram into clusters
+clusters <- cutree(hclust_model, k = K)
+table(clusters)
+```
+
+```{r}
+fviz_dend(hclust_model,k=K, k.colors="jco", 
+          color_labels_by_k=TRUE,cex=0.5,rect=TRUE,
+          rect_border="jco",rect_fill=TRUE,main="")
+```
+
+As observered from the bi-cluster plot of distance matrix, it can be clearly observed that most of the observations belongs to one clusters and there are very few observations in one clusters which is obviously more distant from the rest of the observations. The cluster 3 with only 4 observations might be the ones with the extreme values in the illness duration and the hospital stay. 
+
+## C 
+
+In order to calculate the distance of mixed data Gower’s similarity has used. Gower’s similarity first calculates similarity with respect to each of the variables, and takes the average similarity across the variables. The
+"daisy" function in the "cluster" package has used here since it also handles missing data.
+
+```{r, message=FALSE, warning=FALSE}
+library(cluster)
+```
+
+
+```{r}
+gower_dist <- daisy(df_1, metric = "gower")
+```
+
+```{r}
+pheatmap(t(as.matrix(gower_dist)),
+         color = color,
+         main = "Heatmap of Distance Matrix",
+         legend = TRUE)   
+```
+
+The above heatmap of the distance matrix between the observatios shows that there can be mainly three significant clusters, because there are significant number of distances which are almost near to 0, 0.4 and highest which is 0.8.  
+
+
+```{r}
+# Hierarchical clustering
+gower_hclust <- hclust(gower_dist, method = "complete")
+
+# Plot dendrogram
+fviz_dend(gower_hclust)
+
+```
+
+The number of observations belongs to three clusters are significantly different than the one got using the euclidean distance. 
+
+
+```{r}
+# Cut dendrogram into clusters
+clusters_g <- cutree(gower_hclust, k = K)
+table(clusters_g)
+```
+
+
+```{r}
+fviz_dend(gower_hclust ,k=K, k.colors="jco", 
+          color_labels_by_k=TRUE,cex=0.5,rect=TRUE,
+          rect_border="jco",rect_fill=TRUE,main="")
+```
+The above dendogram with the cluster groups shows that effect from the 4 outliers has not affected the gowers distance. The number of observations included in each of the clusters are significantly different in both th euclideance distance and gower distance for the dataset. 
+
+The main reason is; in euclidean the binary variables has considered as numerical variables and has calculated distance using the euclidean squared distance considering value of binary variables as either 0 or 1. Therefore there is a huge difference in distances.When observing distance matrix of the euclidean distance between the observations it can be observed that there are more 0 valued distances because of the effect of 0 and 1 values.
+
+The distance between the clusters in eucludean distance has mainly affected from the numerical data, that is reason for higher distance between the cluster than the one from the gowers distance. Therefore the 4 observations with extreme values for stay length and the sickness duration had the highest distance from the rest and included as a cluster in euclidean distance method. 
+
+In gower distance, it has considered the dissimilarity between the observations to calculate the distance, Therefore the effect of the outliers hasn't been significant in this method. 
+
+Therefore when there is mixed data like this dataset, it is always better to use the gower distance some other suitable distance other than euclidean distance which is mainly used for numerical data. Otherwise the information from the categorical variables will be surpressed by the numerical variables.
+
+
+
+
+```{r}
+
+# Contingency table
+table(clusters_g, clusters)
+
+```
+
+The above table shows that there are about 58% of the observations has missclassifed between the cluaters in these two methods.
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+library(dplyr)
+
+# Add cluster memberships back to the original dataset
+data_with_clusters <- df_1 %>%
+  mutate(
+    Gower_Cluster = clusters_g,
+    Euclidean_Cluster = clusters
+  )
+```
+
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+# Filter individuals with different classifications
+different_classification <- data_with_clusters %>%
+  filter(Gower_Cluster != Euclidean_Cluster)
+```
+
+
+```{r, warning=FALSE, message=FALSE, echo=FALSE}
+summary_by_gower <- different_classification %>%
+  group_by(Gower_Cluster) %>%
+  summarise(
+    # For numerical variables: compute the mean
+    across(where(is.numeric), mean, na.rm = TRUE),
+    
+    # For categorical variables: handle NAs explicitly
+    across(where(is.factor), ~ paste(unique(na.omit(.)), collapse = ", "))
+  )
+
+summary_by_gower <- summary_by_gower[,-5]
+
+
+# Summarize characteristics of misclassified individuals by Euclidean clusters
+summary_by_euclidean <- different_classification %>%
+  group_by(Euclidean_Cluster) %>%
+  summarise(
+    # For numerical variables: compute the mean
+    across(where(is.numeric), mean, na.rm = TRUE),
+    
+    # For categorical variables: handle NAs explicitly
+    across(where(is.factor), ~ paste(unique(na.omit(.)), collapse = ", "))
+  )
+
+
+summary_by_euclidean <- summary_by_euclidean[,-5]
+```
+
+
+```{r, warning=FALSE, message=FALSE, results='hide', echo=FALSE}
+transpose_table <- function(df) {
+  t_df <- as.data.frame(t(df))
+  colnames(t_df) <- t_df[1, ]
+  t_df <- t_df[-1, ]
+  t_df
+}
+
+
+gower_summay <- transpose_table(summary_by_gower)
+euclidean_summary <- transpose_table(summary_by_euclidean)
+
+
+colnames(gower_summay) <- c("1 - Gower", "2 - Gower", "3 - Gower")
+colnames(euclidean_summary) <- c("1 - Euclidean", "2 - Euclidean", "3 - Euclidean")
+
+```
+
+
+```{r, echo=FALSE}
+Com <- cbind(gower_summay, euclidean_summary) 
+
+Com
+
+```
+
+
+When comparing the characteristics of the miss-classified data, it can the characteristics of the observations in the eculidean 3 cluster are ones withe the extreme values and those has been the calssdified to gower 1 cluster. That must be beacuse the binary variables has surpasses the distance in gower method. 
+
+There has been a missclassification between the gower cluster 1 and euclidean cluster 2 mainly because of the age variable, since mean age in those clusters of the missclassified observations are same. Therefore age has played a major role in the classification in those observations.
+
+The mean value of the hospital stay and the illness duration is almost same in the misslcassified data in the gower cluster 2 and euclidean cluster 1. 
+
+The other miss classification between the clusters must based on the binay variables. 
+
+
+
+
